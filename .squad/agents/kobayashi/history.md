@@ -18,6 +18,12 @@
 - Fenster: workshop-prompts/ library (7 domain-specific prompts) — used in Lab 1 Exercise 03
 - Scribe: decisions.md created with foundational decisions + cross-agent learnings; session log written; orchestration logs for all agents
 - Scribe: Fenster & Kobayashi history.md updated with cross-agent context
+- **Lab 3 & 5 Batch (2026-04-14T16:37Z):** Completed Labs 3–5 content creation
+  - Lab 3 (CampaignService): 10 files (README + 4 exercises + 5 solutions) — backend API development
+  - Lab 5 (Testing): 8 files (README + 3 exercises + 3 solutions + 1 starter) — quality assurance & test patterns (Hockney)
+  - All 6 lab READMEs now feature "Why This Lab?" pedagogical framing
+  - workshop-labs/README.md updated with unified curriculum index
+- Cross-agent synergy: Kobayashi & Hockney parallelized labs 3/5; Scribe orchestrated batch; Coordinator post-processed readmes
 
 ## Learnings
 
