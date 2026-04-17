@@ -63,5 +63,54 @@
 
 ---
 
+## Campaign Management Epic Decisions
+
+### GitHub Project Infrastructure
+**Decision:** GitHub project structure + 32 synchronized issues for Campaign Management epic  
+**Rationale:** GitHub as SSOT for development team; Issue references in commits/PRs; Labels enable workflow automation  
+**Owner:** Keaton  
+**Date:** 2026-04-17  
+**Architecture Decisions Enforced:**
+- 13 labels (epic, story, task, backend, database, testing, frontend, mcp, security, P0-critical, P1-high, P2-medium, P3-low)
+- BigDecimal for Campaign.budget (monetary precision)
+- PATCH for status updates (semantic improvement over PUT)
+- Campaign-Order FK linkage deferred (scope management)
+- Inner enum pattern for CampaignStatus (codebase consistency)
+- Exception reuse via GlobalExceptionHandler (no new custom exceptions)
+- Constructor injection (Spring Boot alignment)
+
+**Impact:** 32 issues (1 Epic, 6 Stories, 25 Tasks) provide granular tracking for 34 SP epic; Critical path: Story 1 → 2 → 3 → 4; Story 5 & 6 parallel
+
+### JIRA CAMP Project Synchronization
+**Decision:** Scrum template (sprints, burndown, velocity) mirrored exactly to GitHub issues  
+**Rationale:** JIRA for sprint planning/reporting; GitHub for development workflow; Dual-tool sync reduces manual data entry  
+**Owner:** Keaton  
+**Date:** 2026-04-17  
+**Project Structure:** CAMP-1 (Epic) + CAMP-2 to CAMP-30 (Stories/Sub-tasks)  
+**Impact:** Team can plan in JIRA, work in GitHub; story point velocity tracked bi-weekly
+
+### Campaign Entity Architecture
+**Decision:** Use BigDecimal for Campaign.budget (not double); Inner enum for CampaignStatus  
+**Rationale:** Monetary precision (double causes rounding errors); Inner enum mirrors Order.OrderStatus pattern (consistency); Triggers future InventoryItem.unitPrice migration  
+**Owner:** Keaton  
+**Date:** 2026-04-17  
+**Impact:** Campaign entity follows OutFront standard; Tech debt documented for future sprint
+
+### Status Update HTTP Verb
+**Decision:** Use PATCH for Campaign status transitions (not PUT)  
+**Rationale:** Semantic correctness (PATCH = partial update, PUT = full replacement); Suggests OrderController refactor in future  
+**Owner:** Keaton  
+**Date:** 2026-04-17  
+**Impact:** Improves REST API semantic clarity; Aligns with HTTP RFC 5789 best practices
+
+### Campaign-Order Linkage Deferral
+**Decision:** Add campaignId FK to orders documented as placeholder; defer to separate story  
+**Rationale:** Avoids cross-domain schema changes in initial epic; Reduces scope creep; Enables Story 1-3 completion without Order domain modifications  
+**Owner:** Keaton  
+**Date:** 2026-04-17  
+**Impact:** Clear scope boundary; tracked in Story 2.3 placeholder for future sprint
+
+---
+
 ## Archived Decisions
-(None yet — first session)
+(None yet — all decisions actively referenced)

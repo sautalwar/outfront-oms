@@ -13,27 +13,16 @@
 - All materials grounded in OutFront Media Order Management System (billboard/digital signage orders, inventory, cross-domain validation)
 - **Completed:** orchestration-log entries at 2026-04-14T16:30Z (Wave 1), 2026-04-14T16:35Z (Wave 2 Labs), 2026-04-14T16:36Z (Wave 2 README)
 
-## Recent Additions from Cross-Agent Work (2026-04-14)
-- Fenster Wave 1: workshop-labs/ structure (50+ files) — src/, .github/, mcp-server/, workshop-prompts/, Docker, lab-01 skeleton
-- Fenster: workshop-prompts/ library (7 domain-specific prompts) — used in Lab 1 Exercise 03
-- Scribe: decisions.md created with foundational decisions + cross-agent learnings; session log written; orchestration logs for all agents
-- Scribe: Fenster & Kobayashi history.md updated with cross-agent context
-- **Lab 3 & 5 Batch (2026-04-14T16:37Z):** Completed Labs 3–5 content creation
-  - Lab 3 (CampaignService): 10 files (README + 4 exercises + 5 solutions) — backend API development
-  - Lab 5 (Testing): 8 files (README + 3 exercises + 3 solutions + 1 starter) — quality assurance & test patterns (Hockney)
-  - All 6 lab READMEs now feature "Why This Lab?" pedagogical framing
-  - workshop-labs/README.md updated with unified curriculum index
-- Cross-agent synergy: Kobayashi & Hockney parallelized labs 3/5; Scribe orchestrated batch; Coordinator post-processed readmes
+## Design Thinking Documentation (2026-04-17)
+- **"How We Built This" PDF:** 21-page narrative synthesizing:
+  - Campaign epic structure (6 stories, 22 tasks, 34 SP)
+  - Architecture decisions (BigDecimal, PATCH, inner enums, deferred FK)
+  - OutFront domain context (billboard/digital signage)
+  - Team patterns (Controller→Service→Repository, constructor injection)
+  - Cross-agent synergies (Fenster prompt library, Hockney testing patterns, McManus CI/CD)
 
-## Learnings
-
-### Workshop Content Creation
-- HTML+PDF dual format maximizes distribution (web + print)
-- Presenter guides benefit from T-key toggle (added by Verbal) for clean live presentation
-- Prerequisites guide with troubleshooting reduces day-of support burden
-- Landscape orientation required for complex data tables in PDF
-
-### Cross-Agent Patterns
-- Redfoot: Competitive Q&A (35+ questions) enhances presenter confidence
-- Fenster: Prompt library (workshop-prompts/) provides participant hands-on structure
-- Verbal: UI enhancements (T-key) boost user experience minimally invasively
+## Latest Session Closure (2026-04-17T08:47:00Z)
+- **Campaign epic:** Design thinking PDF published (21 pages, landscape orientation)
+- **All agents:** 9 total with orchestration logs written
+- **Team memory:** Decisions merged (inbox → decisions.md), session log complete, history.md cross-pollinated
+- **Ready for:** Campaign sprint planning, workshop participant delivery, instructor dry-run

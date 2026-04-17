@@ -6,9 +6,18 @@
 - Two domains: Orders (PENDING→CONFIRMED→SHIPPED) and Inventory (SKU-tracked, low-stock threshold 10)
 - User: Copilot
 
-## Learnings
+## Campaign Management Epic Assignments (2026-04-17)
+- **Stories Assigned:** Story 1 (Entity & Repository), Story 3 (REST API)
+- **Patterns Enforced:** BigDecimal for budget, PATCH for status, inner enum for CampaignStatus, constructor injection, GlobalExceptionHandler exception reuse
+- **Architecture Decisions:** Entity design, repository patterns, controller REST semantics documented in epic breakdown
+- **Critical Path:** Story 1 (5 SP) foundation → Story 3 REST API (8 SP) — core deliverables
 
-### Campaign Epic Breakdown (2025-01-XX)
+## Latest Session Closure (2026-04-17T08:47:00Z)
+- **Epic breakdown:** 6 stories, 22 tasks, 34 SP documented in docs/epic-breakdown.md
+- **GitHub sync:** 32 issues (1 Epic, 6 Stories, 25 Tasks) with 13 labels, full acceptance criteria
+- **JIRA sync:** CAMP project (Scrum template) mirrored from GitHub — sprint ready
+- **Design doc:** "How We Built This" PDF (21 pages, Kobayashi) synthesizes all architecture patterns
+- **Ready for:** Sprint planning (Fenster/Hockney/Verbal story assignments); Development kickoff Story 1
 - **Codebase patterns discovered in outfront-oms:**
   - Entities use inner enums for status (`Order.OrderStatus`, `PurchaseOrder.PurchaseOrderStatus`)
   - `@GeneratedValue(strategy = GenerationType.IDENTITY)` for all PKs
