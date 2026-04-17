@@ -15,6 +15,12 @@
 - README provides quick-reference index for participants
 - **Completed:** orchestration-log entry at 2026-04-14T16:30Z
 
+## Campaign Management Epic Assignments (2026-04-17)
+- **Stories Assigned:** Story 2 (Service Layer), Story 5 (Error Handling)
+- **Key Patterns:** Campaign domain uses same patterns as Order/Inventory (inner enums, constructor injection, GlobalExceptionHandler)
+- **Architecture Decisions:** BigDecimal for budget, PATCH for status, Campaign-Order FK deferred, exception reuse, inner enum pattern
+- **Cross-Domain Insight:** Campaign-Service-level patterns mirror OrderService with inventory cross-check — consider parameterized service methods for reusability
+
 ## Recent Additions from Cross-Agent Work (2026-04-14)
 - Kobayashi Wave 1: workshop-labs/PREREQUISITES.md — participant setup guide (JDK 17, Maven, VS Code, Git, optional Docker/Node.js)
 - Kobayashi Wave 2 Labs: workshop-labs/lab-01-prompts-skills-agents/ (5 exercises + 4 solutions + README) — progressive labs (explore → skill → prompt → agent → integration)

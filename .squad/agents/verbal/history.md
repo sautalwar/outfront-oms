@@ -23,3 +23,9 @@
 - Kobayashi: Content structure (20 slides, detailed notes) benefits from collapsible UI
 - Redfoot: Q&A prep visibility control helps presenter manage confidence level
 - Fenster: Prompt library could benefit from similar toggle for hiding/showing expected outputs during hands-on
+
+## Campaign Management Epic Assignments (2026-04-17)
+- **Stories Assigned:** Story 1 (Entity & Domain Model), Story 3 (API Controllers & Endpoints)
+- **UI/API Integration:** Campaign API will expose RESTful endpoints (PATCH for status); Swagger UI integration via existing SpringDoc setup
+- **Architecture Context:** Inner enum pattern for CampaignStatus, constructor injection, GlobalExceptionHandler exception mapping
+- **Presenter Value:** Campaign entity demo aligns with Workshop_Presenter_Guide.html — consider adding Campaign API endpoint showcase

@@ -22,3 +22,9 @@
 - **Coordinator:** Post-batch: enhanced all lab READMEs with "Why This Lab?" framing
 - **Scribe:** Orchestration logs + session summary + history.md cross-pollination
 - Parallel execution + sequential post-processing optimizes delivery timeline
+
+## Campaign Management Epic Assignments (2026-04-17)
+- **Stories Assigned:** Story 4 (Integration Tests), Story 6 (E2E Testing)
+- **Test Patterns Alignment:** Campaign tests will follow same patterns as Order/Inventory integration tests (MockMvc, @SpringBootTest, H2 context)
+- **Architecture Context:** BigDecimal budget (monetary precision), PATCH for status updates, inner enum pattern for CampaignStatus
+- **Cross-Domain Insight:** Consider shared test fixtures for entity seeding; Campaign seeding will follow existing data.sql patterns
