@@ -1,0 +1,671 @@
+name: API Integration Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      
+      - name: Build application
+        run: mvn clean package -DskipTests -B --no-transfer-progress
+      
+      - name: Start application
+        run: |
+          java -jar target/*.jar &
+          APP_PID=$!
+          echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+          
+          # Wait for app to be ready (check actuator health endpoint)
+          echo "Waiting for application to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "Application is ready!"
+              break
+            fi
+            echo "Attempt $i/30: App not ready yet, waiting 2 seconds..."
+            sleep 2
+          done
+          
+          # Final check
+          if ! curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+            echo "ERROR: Application failed to start within 60 seconds"
+            exit 1
+          fi
+      
+      - name: Test Order Endpoints
+        run: |
+          PASS_COUNT=0
+          FAIL_COUNT=0
+          
+          echo "========================================="
+          echo "TESTING ORDER ENDPOINTS"
+          echo "========================================="
+          
+          # Test 1: GET /api/orders — List all orders
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/orders)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/orders returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '. | length > 0' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/orders returned empty array"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/orders — $HTTP_CODE ($(echo "$BODY" | jq '. | length') orders)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 2: GET /api/orders/1 — Get order by ID (using seed data ID 1)
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/orders/1)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/orders/1 returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id == 1' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/orders/1 did not return order with id=1"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/orders/1 — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 3: GET /api/orders?status=PENDING — Filter by status
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/orders?status=PENDING)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/orders?status=PENDING returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/orders?status=PENDING — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 4: GET /api/orders/summary — Get order count summary
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/orders/summary)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/orders/summary returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.total' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/orders/summary missing 'total' field"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/orders/summary — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 5: GET /api/orders/date-range — Filter by date
+          RESPONSE=$(curl -s -w "\n%{http_code}" "http://localhost:8080/api/orders/date-range?startDate=2024-10-01&endDate=2024-12-31")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/orders/date-range returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/orders/date-range — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 6: POST /api/orders — Create new order
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/orders \
+            -H "Content-Type: application/json" \
+            -d '{
+              "customerName": "Test Customer",
+              "productName": "Test Product",
+              "quantity": 5,
+              "status": "PENDING",
+              "shippingAddress": "123 Test St",
+              "notes": "API test order"
+            }')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "201" ]; then
+            echo "❌ FAIL: POST /api/orders returned $HTTP_CODE (expected 201)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id' > /dev/null 2>&1; then
+            echo "❌ FAIL: POST /api/orders did not return an id"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            CREATED_ORDER_ID=$(echo "$BODY" | jq -r '.id')
+            echo "✅ PASS: POST /api/orders — $HTTP_CODE (created order $CREATED_ORDER_ID)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+            
+            # Test 7: PUT /api/orders/{id}/status — Update order status
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT http://localhost:8080/api/orders/$CREATED_ORDER_ID/status \
+              -H "Content-Type: application/json" \
+              -d '{"status": "CONFIRMED"}')
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ FAIL: PUT /api/orders/$CREATED_ORDER_ID/status returned $HTTP_CODE (expected 200)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            elif ! echo "$BODY" | jq -e '.status == "CONFIRMED"' > /dev/null 2>&1; then
+              echo "❌ FAIL: PUT /api/orders/$CREATED_ORDER_ID/status did not update status"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            else
+              echo "✅ PASS: PUT /api/orders/$CREATED_ORDER_ID/status — $HTTP_CODE"
+              PASS_COUNT=$((PASS_COUNT + 1))
+            fi
+          fi
+          
+          # Test 8: GET /api/orders/999 — Not found (404)
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/orders/999)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" != "404" ]; then
+            echo "❌ FAIL: GET /api/orders/999 returned $HTTP_CODE (expected 404)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/orders/999 — $HTTP_CODE (not found)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 9: DELETE /api/orders/{id} — Delete pending order
+          # Create a new order to delete
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/orders \
+            -H "Content-Type: application/json" \
+            -d '{"customerName": "Delete Test", "productName": "Test", "quantity": 1, "status": "PENDING", "shippingAddress": "123 St"}')
+          DELETE_ORDER_ID=$(echo "$RESPONSE" | head -n -1 | jq -r '.id')
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE http://localhost:8080/api/orders/$DELETE_ORDER_ID)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" != "204" ]; then
+            echo "❌ FAIL: DELETE /api/orders/$DELETE_ORDER_ID returned $HTTP_CODE (expected 204)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: DELETE /api/orders/$DELETE_ORDER_ID — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          echo ""
+          echo "Order Endpoints: $PASS_COUNT passed, $FAIL_COUNT failed"
+          echo "PASS_COUNT_ORDERS=$PASS_COUNT" >> $GITHUB_ENV
+          echo "FAIL_COUNT_ORDERS=$FAIL_COUNT" >> $GITHUB_ENV
+          
+          if [ $FAIL_COUNT -gt 0 ]; then
+            exit 1
+          fi
+      
+      - name: Test Inventory Endpoints
+        run: |
+          PASS_COUNT=0
+          FAIL_COUNT=0
+          
+          echo "========================================="
+          echo "TESTING INVENTORY ENDPOINTS"
+          echo "========================================="
+          
+          # Test 1: GET /api/inventory — List all items
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/inventory)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/inventory returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '. | length > 0' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/inventory returned empty array"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/inventory — $HTTP_CODE ($(echo "$BODY" | jq '. | length') items)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 2: GET /api/inventory/1 — Get by ID
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/inventory/1)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/inventory/1 returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id == 1' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/inventory/1 did not return item with id=1"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/inventory/1 — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 3: GET /api/inventory/sku/DSU-9648 — Get by SKU
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/inventory/sku/DSU-9648)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/inventory/sku/DSU-9648 returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.sku == "DSU-9648"' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/inventory/sku/DSU-9648 did not return correct SKU"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/inventory/sku/DSU-9648 — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 4: GET /api/inventory/search?q=Digital — Search items
+          RESPONSE=$(curl -s -w "\n%{http_code}" "http://localhost:8080/api/inventory/search?q=Digital")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/inventory/search?q=Digital returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/inventory/search?q=Digital — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 5: GET /api/inventory/categories — List all categories
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/inventory/categories)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/inventory/categories returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '. | length > 0' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/inventory/categories returned empty array"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/inventory/categories — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 6: GET /api/inventory/category/Displays — Filter by category
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/inventory/category/Displays)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/inventory/category/Displays returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '. | length > 0' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/inventory/category/Displays returned empty array"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/inventory/category/Displays — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 7: GET /api/inventory/low-stock — Get low stock items
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/inventory/low-stock)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/inventory/low-stock returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/inventory/low-stock — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 8: POST /api/inventory — Create new item
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/inventory \
+            -H "Content-Type: application/json" \
+            -d '{
+              "sku": "TEST-001",
+              "name": "Test Item",
+              "description": "Test inventory item",
+              "category": "Test",
+              "quantity": 100,
+              "reorderLevel": 20,
+              "unitPrice": 50.00,
+              "location": "Test Warehouse"
+            }')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "201" ]; then
+            echo "❌ FAIL: POST /api/inventory returned $HTTP_CODE (expected 201)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id' > /dev/null 2>&1; then
+            echo "❌ FAIL: POST /api/inventory did not return an id"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            CREATED_ITEM_ID=$(echo "$BODY" | jq -r '.id')
+            echo "✅ PASS: POST /api/inventory — $HTTP_CODE (created item $CREATED_ITEM_ID)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+            
+            # Test 9: PUT /api/inventory/{id} — Update item
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT http://localhost:8080/api/inventory/$CREATED_ITEM_ID \
+              -H "Content-Type: application/json" \
+              -d '{
+                "sku": "TEST-001",
+                "name": "Updated Test Item",
+                "description": "Updated description",
+                "category": "Test",
+                "quantity": 150,
+                "reorderLevel": 25,
+                "unitPrice": 60.00,
+                "location": "Test Warehouse"
+              }')
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ FAIL: PUT /api/inventory/$CREATED_ITEM_ID returned $HTTP_CODE (expected 200)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            elif ! echo "$BODY" | jq -e '.name == "Updated Test Item"' > /dev/null 2>&1; then
+              echo "❌ FAIL: PUT /api/inventory/$CREATED_ITEM_ID did not update name"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            else
+              echo "✅ PASS: PUT /api/inventory/$CREATED_ITEM_ID — $HTTP_CODE"
+              PASS_COUNT=$((PASS_COUNT + 1))
+            fi
+            
+            # Test 10: PATCH /api/inventory/{id}/stock — Adjust stock
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PATCH http://localhost:8080/api/inventory/$CREATED_ITEM_ID/stock \
+              -H "Content-Type: application/json" \
+              -d '{"adjustment": -10}')
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ FAIL: PATCH /api/inventory/$CREATED_ITEM_ID/stock returned $HTTP_CODE (expected 200)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            elif ! echo "$BODY" | jq -e '.quantity == 140' > /dev/null 2>&1; then
+              echo "❌ FAIL: PATCH /api/inventory/$CREATED_ITEM_ID/stock did not adjust quantity"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            else
+              echo "✅ PASS: PATCH /api/inventory/$CREATED_ITEM_ID/stock — $HTTP_CODE"
+              PASS_COUNT=$((PASS_COUNT + 1))
+            fi
+            
+            # Test 11: DELETE /api/inventory/{id} — Delete item
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE http://localhost:8080/api/inventory/$CREATED_ITEM_ID)
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            if [ "$HTTP_CODE" != "204" ]; then
+              echo "❌ FAIL: DELETE /api/inventory/$CREATED_ITEM_ID returned $HTTP_CODE (expected 204)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            else
+              echo "✅ PASS: DELETE /api/inventory/$CREATED_ITEM_ID — $HTTP_CODE"
+              PASS_COUNT=$((PASS_COUNT + 1))
+            fi
+          fi
+          
+          echo ""
+          echo "Inventory Endpoints: $PASS_COUNT passed, $FAIL_COUNT failed"
+          echo "PASS_COUNT_INVENTORY=$PASS_COUNT" >> $GITHUB_ENV
+          echo "FAIL_COUNT_INVENTORY=$FAIL_COUNT" >> $GITHUB_ENV
+          
+          if [ $FAIL_COUNT -gt 0 ]; then
+            exit 1
+          fi
+      
+      - name: Test Supplier Endpoints
+        run: |
+          PASS_COUNT=0
+          FAIL_COUNT=0
+          
+          echo "========================================="
+          echo "TESTING SUPPLIER ENDPOINTS"
+          echo "========================================="
+          
+          # Test 1: GET /api/suppliers — List all suppliers
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/suppliers)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/suppliers returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '. | length > 0' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/suppliers returned empty array"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/suppliers — $HTTP_CODE ($(echo "$BODY" | jq '. | length') suppliers)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 2: GET /api/suppliers/active — List active suppliers
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/suppliers/active)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/suppliers/active returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '. | length > 0' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/suppliers/active returned empty array"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/suppliers/active — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 3: GET /api/suppliers/1 — Get by ID
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/suppliers/1)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/suppliers/1 returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id == 1' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/suppliers/1 did not return supplier with id=1"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/suppliers/1 — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 4: POST /api/suppliers — Create new supplier
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/suppliers \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "Test Supplier",
+              "contactEmail": "test@supplier.com",
+              "contactPhone": "555-9999",
+              "address": "123 Test Ave",
+              "active": true
+            }')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "201" ]; then
+            echo "❌ FAIL: POST /api/suppliers returned $HTTP_CODE (expected 201)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id' > /dev/null 2>&1; then
+            echo "❌ FAIL: POST /api/suppliers did not return an id"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            CREATED_SUPPLIER_ID=$(echo "$BODY" | jq -r '.id')
+            echo "✅ PASS: POST /api/suppliers — $HTTP_CODE (created supplier $CREATED_SUPPLIER_ID)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+            
+            # Test 5: PUT /api/suppliers/{id} — Update supplier
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT http://localhost:8080/api/suppliers/$CREATED_SUPPLIER_ID \
+              -H "Content-Type: application/json" \
+              -d '{
+                "name": "Updated Test Supplier",
+                "contactEmail": "updated@supplier.com",
+                "contactPhone": "555-8888",
+                "address": "456 Updated Ave",
+                "active": true
+              }')
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ FAIL: PUT /api/suppliers/$CREATED_SUPPLIER_ID returned $HTTP_CODE (expected 200)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            elif ! echo "$BODY" | jq -e '.name == "Updated Test Supplier"' > /dev/null 2>&1; then
+              echo "❌ FAIL: PUT /api/suppliers/$CREATED_SUPPLIER_ID did not update name"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            else
+              echo "✅ PASS: PUT /api/suppliers/$CREATED_SUPPLIER_ID — $HTTP_CODE"
+              PASS_COUNT=$((PASS_COUNT + 1))
+            fi
+            
+            # Test 6: DELETE /api/suppliers/{id} — Deactivate supplier
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE http://localhost:8080/api/suppliers/$CREATED_SUPPLIER_ID)
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            if [ "$HTTP_CODE" != "204" ]; then
+              echo "❌ FAIL: DELETE /api/suppliers/$CREATED_SUPPLIER_ID returned $HTTP_CODE (expected 204)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            else
+              echo "✅ PASS: DELETE /api/suppliers/$CREATED_SUPPLIER_ID — $HTTP_CODE"
+              PASS_COUNT=$((PASS_COUNT + 1))
+            fi
+          fi
+          
+          echo ""
+          echo "Supplier Endpoints: $PASS_COUNT passed, $FAIL_COUNT failed"
+          echo "PASS_COUNT_SUPPLIERS=$PASS_COUNT" >> $GITHUB_ENV
+          echo "FAIL_COUNT_SUPPLIERS=$FAIL_COUNT" >> $GITHUB_ENV
+          
+          if [ $FAIL_COUNT -gt 0 ]; then
+            exit 1
+          fi
+      
+      - name: Test Purchase Order Endpoints
+        run: |
+          PASS_COUNT=0
+          FAIL_COUNT=0
+          
+          echo "========================================="
+          echo "TESTING PURCHASE ORDER ENDPOINTS"
+          echo "========================================="
+          
+          # Test 1: GET /api/purchase-orders — List all purchase orders
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/purchase-orders)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/purchase-orders returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '. | length > 0' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/purchase-orders returned empty array"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/purchase-orders — $HTTP_CODE ($(echo "$BODY" | jq '. | length') purchase orders)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 2: GET /api/purchase-orders/1 — Get by ID
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/purchase-orders/1)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/purchase-orders/1 returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id == 1' > /dev/null 2>&1; then
+            echo "❌ FAIL: GET /api/purchase-orders/1 did not return PO with id=1"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/purchase-orders/1 — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 3: GET /api/purchase-orders/status/SUBMITTED — Filter by status
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/purchase-orders/status/SUBMITTED)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/purchase-orders/status/SUBMITTED returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/purchase-orders/status/SUBMITTED — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 4: GET /api/purchase-orders/supplier/1 — Filter by supplier
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8080/api/purchase-orders/supplier/1)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ FAIL: GET /api/purchase-orders/supplier/1 returned $HTTP_CODE (expected 200)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            echo "✅ PASS: GET /api/purchase-orders/supplier/1 — $HTTP_CODE"
+            PASS_COUNT=$((PASS_COUNT + 1))
+          fi
+          
+          # Test 5: POST /api/purchase-orders — Create new purchase order
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/purchase-orders \
+            -H "Content-Type: application/json" \
+            -d '{
+              "supplierId": 1,
+              "inventoryItemId": 1,
+              "quantityOrdered": 50,
+              "status": "DRAFT",
+              "orderDate": "2024-11-20",
+              "expectedDeliveryDate": "2024-12-20",
+              "notes": "Test purchase order"
+            }')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" != "201" ]; then
+            echo "❌ FAIL: POST /api/purchase-orders returned $HTTP_CODE (expected 201)"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          elif ! echo "$BODY" | jq -e '.id' > /dev/null 2>&1; then
+            echo "❌ FAIL: POST /api/purchase-orders did not return an id"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+          else
+            CREATED_PO_ID=$(echo "$BODY" | jq -r '.id')
+            echo "✅ PASS: POST /api/purchase-orders — $HTTP_CODE (created PO $CREATED_PO_ID)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+            
+            # Test 6: PUT /api/purchase-orders/{id}/status — Update status
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT http://localhost:8080/api/purchase-orders/$CREATED_PO_ID/status \
+              -H "Content-Type: application/json" \
+              -d '{"status": "SUBMITTED"}')
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ FAIL: PUT /api/purchase-orders/$CREATED_PO_ID/status returned $HTTP_CODE (expected 200)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            elif ! echo "$BODY" | jq -e '.status == "SUBMITTED"' > /dev/null 2>&1; then
+              echo "❌ FAIL: PUT /api/purchase-orders/$CREATED_PO_ID/status did not update status"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            else
+              echo "✅ PASS: PUT /api/purchase-orders/$CREATED_PO_ID/status — $HTTP_CODE"
+              PASS_COUNT=$((PASS_COUNT + 1))
+            fi
+          fi
+          
+          echo ""
+          echo "Purchase Order Endpoints: $PASS_COUNT passed, $FAIL_COUNT failed"
+          echo "PASS_COUNT_PO=$PASS_COUNT" >> $GITHUB_ENV
+          echo "FAIL_COUNT_PO=$FAIL_COUNT" >> $GITHUB_ENV
+          
+          if [ $FAIL_COUNT -gt 0 ]; then
+            exit 1
+          fi
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "========================================="
+          echo "FINAL TEST SUMMARY"
+          echo "========================================="
+          TOTAL_PASS=$((PASS_COUNT_ORDERS + PASS_COUNT_INVENTORY + PASS_COUNT_SUPPLIERS + PASS_COUNT_PO))
+          TOTAL_FAIL=$((FAIL_COUNT_ORDERS + FAIL_COUNT_INVENTORY + FAIL_COUNT_SUPPLIERS + FAIL_COUNT_PO))
+          TOTAL_TESTS=$((TOTAL_PASS + TOTAL_FAIL))
+          
+          echo ""
+          echo "Order Endpoints:          $PASS_COUNT_ORDERS passed, $FAIL_COUNT_ORDERS failed"
+          echo "Inventory Endpoints:      $PASS_COUNT_INVENTORY passed, $FAIL_COUNT_INVENTORY failed"
+          echo "Supplier Endpoints:       $PASS_COUNT_SUPPLIERS passed, $FAIL_COUNT_SUPPLIERS failed"
+          echo "Purchase Order Endpoints: $PASS_COUNT_PO passed, $FAIL_COUNT_PO failed"
+          echo ""
+          echo "========================================="
+          echo "TOTAL: $TOTAL_PASS/$TOTAL_TESTS tests passed"
+          echo "========================================="
+          
+          if [ $TOTAL_FAIL -gt 0 ]; then
+            echo "❌ Some tests failed"
+            exit 1
+          else
+            echo "✅ All tests passed!"
+          fi
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          # Stop the application
+          if [ ! -z "$APP_PID" ]; then
+            kill $APP_PID 2>/dev/null || true
+            echo "Application stopped"
+          fi

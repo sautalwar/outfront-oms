@@ -1,0 +1,54 @@
+#!/bin/bash
+# Pre-commit hook for OutFront OMS
+# Checks coding standards in staged Java files and runs tests.
+
+PASS=true
+
+# Get list of staged Java files
+STAGED_JAVA=$(git diff --cached --name-only --diff-filter=ACM | grep '\.java$')
+
+if [ -n "$STAGED_JAVA" ]; then
+    echo "🔍 Checking staged Java files..."
+
+    # Check for System.out.println (should use SLF4J)
+    SYSOUT_FILES=$(echo "$STAGED_JAVA" | xargs grep -l 'System\.out\.println' 2>/dev/null || true)
+    if [ -n "$SYSOUT_FILES" ]; then
+        echo "❌ Found System.out.println — use SLF4J logger instead:"
+        echo "$SYSOUT_FILES" | sed 's/^/   /'
+        PASS=false
+    else
+        echo "✅ No System.out.println found"
+    fi
+
+    # Check for field-level @Autowired (should use constructor injection)
+    AUTOWIRED_FILES=$(echo "$STAGED_JAVA" | xargs grep -l '@Autowired' 2>/dev/null || true)
+    if [ -n "$AUTOWIRED_FILES" ]; then
+        echo "❌ Found @Autowired on fields — use constructor injection instead:"
+        echo "$AUTOWIRED_FILES" | sed 's/^/   /'
+        PASS=false
+    else
+        echo "✅ No field @Autowired found"
+    fi
+else
+    echo "ℹ️  No staged Java files to check"
+fi
+
+# Run tests
+echo ""
+echo "🧪 Running tests..."
+mvn test -q -B 2>&1
+if [ $? -ne 0 ]; then
+    echo "❌ Tests failed — commit aborted"
+    PASS=false
+else
+    echo "✅ All tests passed"
+fi
+
+echo ""
+if [ "$PASS" = true ]; then
+    echo "🎉 Pre-commit checks passed!"
+    exit 0
+else
+    echo "🚫 Pre-commit checks failed. Fix issues above or use --no-verify to skip."
+    exit 1
+fi

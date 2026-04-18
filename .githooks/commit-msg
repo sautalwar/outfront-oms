@@ -1,0 +1,31 @@
+#!/bin/bash
+# Commit-msg hook for OutFront OMS
+# Enforces conventional commit format: type(scope): description
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(head -1 "$COMMIT_MSG_FILE")
+
+# Allow merge commits and fixup/squash commits
+if echo "$COMMIT_MSG" | grep -qE '^(Merge|fixup!|squash!)'; then
+    exit 0
+fi
+
+PATTERN='^(feat|fix|refactor|test|docs|chore)\(.+\): .+'
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+    echo "❌ Invalid commit message format!"
+    echo ""
+    echo "   Expected: type(scope): description"
+    echo "   Types:    feat | fix | refactor | test | docs | chore"
+    echo ""
+    echo "   Examples:"
+    echo "     feat(orders): add bulk order creation endpoint"
+    echo "     fix(inventory): correct low-stock threshold check"
+    echo "     test(orders): add tests for status transitions"
+    echo ""
+    echo "   Your message: $COMMIT_MSG"
+    exit 1
+fi
+
+echo "✅ Commit message format OK"
+exit 0

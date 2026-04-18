@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # Maven dependencies
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "master"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    reviewers:
+      - "sautalwar"
+
+  # Docker base image updates
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "master"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    reviewers:
+      - "sautalwar"
+
+  # GitHub Actions version updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "master"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    reviewers:
+      - "sautalwar"
