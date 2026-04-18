@@ -16,6 +16,7 @@ How to decide who handles what.
 | Repo investigation, what exists, duplication check | Kujan | Scan existing work, prevent rework, map coverage |
 | Session export, save PDF, session report | Strausz | Capture Q&A to PDF reference doc |
 | Code review | Keaton | Review PRs, check quality, suggest improvements |
+| Copilot customization, instructions, prompts, agents, skills, MCP config | Edie | copilot-instructions.md, .prompt.md, .chatmode.md, .agent.md, .skill.md, MCP servers, hooks |
 | Session logging | Scribe | Automatic — never needs routing |
 
 ## Issue Routing

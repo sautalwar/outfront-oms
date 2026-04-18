@@ -22,6 +22,7 @@
 | Scribe | Scribe | .squad/agents/scribe/charter.md | 📋 Active |
 | Kujan | Context Scout | .squad/agents/kujan/charter.md | 🔎 Active |
 | Strausz | Session Reporter | .squad/agents/strausz/charter.md | 📄 Active |
+| Edie | Copilot Customization Expert | .squad/agents/edie/charter.md | 🛠️ Active |
 | Ralph | Work Monitor | — | 🔄 Monitor |
 
 ## Project Context

@@ -70,5 +70,13 @@
     "created_at": "2026-04-14T14:43:00Z",
     "legacy_named": false,
     "status": "active"
+  },
+  {
+    "persistent_name": "Edie",
+    "universe": "the-usual-suspects",
+    "role": "Copilot Customization Expert",
+    "created_at": "2026-04-18T15:04:00Z",
+    "legacy_named": false,
+    "status": "active"
   }
 ]
