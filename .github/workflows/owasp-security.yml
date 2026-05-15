@@ -30,7 +30,7 @@ jobs:
     name: SCA - Dependency Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -60,7 +60,7 @@ jobs:
     name: SAST - SpotBugs + FindSecBugs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -87,7 +87,7 @@ jobs:
     name: DAST - ZAP Baseline Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up JDK 17
         uses: actions/setup-java@v4
